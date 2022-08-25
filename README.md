@@ -14,7 +14,10 @@ Configuration used gonfig. All configs are declared in `config/config.json`
 | model | Models|
 
 
+
 ## Run 
 `go run server.go`
+
+## Create Token -> Save Data to Redis -> Using Refresh Token To Logout and Update is_login
 
 
