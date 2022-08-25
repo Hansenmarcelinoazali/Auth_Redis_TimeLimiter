@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-redis/redis"
@@ -36,10 +37,9 @@ func UserLogin(c echo.Context) error {
 			Token:      nil,
 		}
 		fmt.Println(err)
-		kirim = c.JSON(http.StatusOK, response)
+		// kirim = c.JSON(http.StatusOK, response)
 	}
 
-	// err = Logout(c, &note)
 
 	value, _ := Generate(c, &note)
 	token := value[0:20]
@@ -51,13 +51,19 @@ func UserLogin(c echo.Context) error {
 
 	refreshtoken, _ := RefreshToken(c, &note)
 	refresh := refreshtoken[0:20]
-	updatedb := db.Model(&model.Users{}).Where("email = ? or username = ? AND password = ?", note.Email, note.Username, note.Password).Update("is_login", true, "refresh_token", refresh)
-	if err != nil {
-		fmt.Println("update error", updatedb)
-	}
-	updaterefresh := db.Model(&model.Users{}).Where("email = ? or username = ? AND password = ?", note.Email, note.Username, note.Password).Update("refresh_token", refresh)
-	if err != nil {
-		fmt.Println("update error", updaterefresh)
+
+	// updatedb := db.Model(&model.Users{}).Where("email = ? or username = ? AND password = ?", note.Email, note.Username, note.Password).Update("is_login", true, "refresh_token", refresh)
+	// if err != nil {
+	// 	fmt.Println("update error", updatedb)
+	// }
+	// updaterefresh := db.Model(&model.Users{}).Where("email = ? or username = ? AND password = ?", note.Email, note.Username, note.Password).Update("refresh_token", refresh)
+	// if err != nil {
+	// 	fmt.Println("update error", updaterefresh)
+	// }
+	updatedb := db.Model(&model.Users{}).Where("email = ? or username = ? AND password = ?", note.Email, note.Username, note.Password).Updates(map[string]interface{}{"is_login": true, "refresh_token": refresh})
+
+	if updatedb != nil {
+		fmt.Println("update login gagal")
 	}
 	fmt.Println(refresh)
 	fmt.Println("panjang refresh token: ", len(refresh))
@@ -124,11 +130,14 @@ func Redis(token string, userdata []byte) {
 
 func CheckHealth(c echo.Context) error {
 
-	tokenParam := c.QueryParam("token")
+
+	tokenParam := c.Request().Header.Get("Authorization")
 	tokenKey := c.Request().Header.Get("X-App-Key")
 	tokenSecret := c.Request().Header.Get("X-App-Secret")
+	fmt.Println("healt", tokenParam)
 	fmt.Println(tokenKey)
 	fmt.Println(tokenSecret)
+	tokenParamsAuth := strings.Split(tokenParam, " ")
 
 	keyS := "training"
 	secret := "raya"
@@ -142,7 +151,7 @@ func CheckHealth(c echo.Context) error {
 	}
 
 	fmt.Println("ini token params:", tokenParam)
-	val, _ := GetRedis(tokenParam)
+	val, _ := GetRedis(tokenParamsAuth[1])
 	fmt.Println("check -----", val)
 
 	kirim := c.JSON(http.StatusOK, val)
@@ -179,7 +188,9 @@ func Logout(c echo.Context) error {
 	rdb := newRedisClient(redisHost, redisPassword)
 	tokenSecret := c.Request().Header.Get("Refresh-Token")
 	fmt.Println("ini refresh token", tokenSecret)
-	tokenParam := c.QueryParam("key")
+	
+	tokenParam := c.Request().Header.Get("Authorization")
+	tokenParamAuthLogout := strings.Split(tokenParam, " ")
 
 	db := db.DbManager()
 	updaterefresh := db.Model(&model.Users{}).Where("refresh_token = ?", tokenSecret).Update("is_login", false)
@@ -187,7 +198,7 @@ func Logout(c echo.Context) error {
 		fmt.Println("update error", updaterefresh)
 	}
 
-	err := rdb.Del(tokenParam)
+	err := rdb.Del(tokenParamAuthLogout...)
 	if err != nil {
 		return nil
 	}
