@@ -4,15 +4,16 @@ import (
 	"ECHO-GORM/api/helpers"
 	"ECHO-GORM/db"
 	"ECHO-GORM/model"
+	"ECHO-GORM/redis"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"strings"
 	"time"
 
-	"github.com/go-redis/redis"
 	"github.com/labstack/echo"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -37,9 +38,7 @@ func UserLogin(c echo.Context) error {
 			Token:      nil,
 		}
 		fmt.Println(err)
-		// kirim = c.JSON(http.StatusOK, response)
 	}
-
 
 	value, _ := Generate(c, &note)
 	token := value[0:20]
@@ -52,14 +51,6 @@ func UserLogin(c echo.Context) error {
 	refreshtoken, _ := RefreshToken(c, &note)
 	refresh := refreshtoken[0:20]
 
-	// updatedb := db.Model(&model.Users{}).Where("email = ? or username = ? AND password = ?", note.Email, note.Username, note.Password).Update("is_login", true, "refresh_token", refresh)
-	// if err != nil {
-	// 	fmt.Println("update error", updatedb)
-	// }
-	// updaterefresh := db.Model(&model.Users{}).Where("email = ? or username = ? AND password = ?", note.Email, note.Username, note.Password).Update("refresh_token", refresh)
-	// if err != nil {
-	// 	fmt.Println("update error", updaterefresh)
-	// }
 	updatedb := db.Model(&model.Users{}).Where("email = ? or username = ? AND password = ?", note.Email, note.Username, note.Password).Updates(map[string]interface{}{"is_login": true, "refresh_token": refresh})
 
 	if updatedb != nil {
@@ -98,20 +89,9 @@ func RefreshToken(c echo.Context, note *model.Users) (string, error) {
 	return base64.StdEncoding.EncodeToString(hash[0:20]), err
 }
 
-func newRedisClient(host string, password string) *redis.Client {
-	client := redis.NewClient(&redis.Options{
-		Addr:     host,
-		Password: password,
-		DB:       0,
-	})
-	return client
-}
-
 func Redis(token string, userdata []byte) {
-	var redisHost = "localhost:6379"
-	var redisPassword = ""
 
-	rdb := newRedisClient(redisHost, redisPassword)
+	rdb := redis.NewRedisClient()
 	fmt.Println("redis client initialized")
 
 	key := token
@@ -129,8 +109,6 @@ func Redis(token string, userdata []byte) {
 }
 
 func CheckHealth(c echo.Context) error {
-
-
 	tokenParam := c.Request().Header.Get("Authorization")
 	tokenKey := c.Request().Header.Get("X-App-Key")
 	tokenSecret := c.Request().Header.Get("X-App-Secret")
@@ -161,10 +139,7 @@ func CheckHealth(c echo.Context) error {
 
 func GetRedis(token string) (string, error) {
 
-	var redisHost = "localhost:6379"
-	var redisPassword = ""
-
-	rdb := newRedisClient(redisHost, redisPassword)
+	rdb := redis.NewRedisClient()
 	fmt.Println("redis client initialized")
 
 	op2 := rdb.Get(token)
@@ -183,12 +158,11 @@ func GetRedis(token string) (string, error) {
 }
 
 func Logout(c echo.Context) error {
-	var redisHost = "localhost:6379"
-	var redisPassword = ""
-	rdb := newRedisClient(redisHost, redisPassword)
+
+	rdb := redis.NewRedisClient()
 	tokenSecret := c.Request().Header.Get("Refresh-Token")
 	fmt.Println("ini refresh token", tokenSecret)
-	
+
 	tokenParam := c.Request().Header.Get("Authorization")
 	tokenParamAuthLogout := strings.Split(tokenParam, " ")
 
@@ -202,5 +176,5 @@ func Logout(c echo.Context) error {
 	if err != nil {
 		return nil
 	}
-	return nil
+	return errors.New("anda berhasil logout")
 }
